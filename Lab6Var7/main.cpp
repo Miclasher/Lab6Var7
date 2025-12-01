@@ -2,6 +2,8 @@
 #include <coroutine>
 #include <random>
 
+struct Controller;
+
 struct Task {
     struct promise_type;
     using handle_type = std::coroutine_handle<promise_type>;
@@ -33,13 +35,12 @@ struct Task {
         FinalAwaiter final_suspend() noexcept { return {}; }
         void return_void() {}
         void unhandled_exception() { std::terminate(); }
+
+        auto await_transform(int n);
     };
 };
 
-Task CoroutineA(int n) {
-    std::cout << "Event (Even): " << n << std::endl;
-    co_return;
-}
+Task CoroutineA(int n);
 
 struct Controller {
     int value;
@@ -51,6 +52,7 @@ struct Controller {
             Task t = CoroutineA(value);
             t.h.promise().continuation = caller;
             std::coroutine_handle<> next = t.h;
+
             t.h = nullptr;
             return next;
         }
@@ -62,13 +64,22 @@ struct Controller {
     void await_resume() {}
 };
 
+auto Task::promise_type::await_transform(int n) {
+    return Controller{ n };
+}
+
+Task CoroutineA(int n) {
+    std::cout << "Event (Even): " << n << std::endl;
+    co_return;
+}
+
 Task Generator() {
     std::mt19937 gen(std::random_device{}());
     std::uniform_int_distribution<> dist(1, 256);
 
     for (int i = 0; i < 10; ++i) {
         int n = dist(gen);
-        co_await Controller{ n };
+        co_await n;
     }
 }
 
